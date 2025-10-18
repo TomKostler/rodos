@@ -24,6 +24,7 @@ SECTIONS {
     *(.gnu.linkonce.t*)
   } > ram
 
+
   .ARM.extab : {
     *(.ARM.extab* .gnu.linkonce.armextab.*)
   } > ram
@@ -97,6 +98,21 @@ SECTIONS {
     . = . + _Min_Stack_Size;
     . = ALIGN(4);
   } > ram
+
+
+
+
+  /* Place the Stacks at the end of the available RAM, important for RAM-Partitioning
+   * System stack first, since it grows dynamically and can get large because of user programs (=> Not overriding other stacks) 
+   */
+  __ram_end__        = ORIGIN(ram) + LENGTH(ram);
+  __stack_svc_top__  = ALIGN(__ram_end__, 16);
+  __stack_irq_top__  = __stack_svc_top__ - 0x5000;
+  __stack_sys_top__  = __stack_irq_top__ - 0x4000;
+
+
+
+
 
   /DISCARD/ : {
     *(.comment)

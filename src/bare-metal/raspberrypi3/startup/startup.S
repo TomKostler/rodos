@@ -51,26 +51,82 @@ reset_hyp_mode:
     eret
 
 reset_svc_mode:
+    // delta = runtime - linktime
+    adr r10, .Lpic_base
+    ldr r11, =.Lpic_base
+    sub r9,  r10, r11           // r9 contains the delta (0 if load==link)
+.Lpic_base:
+
+    // Set VBAR = _exception_table (No copying needed anymore)
+    ldr r0, =_exception_table
+    add r0, r0, r9
+    mcr p15, 0, r0, c12, c0, 0
+    isb
+
+
+
+    // Init the Stacks for different CPU-Modes
+    // SVC
+    ldr r2, =__stack_svc_top__
+    add r2, r2, r9
+    mov sp, r2
+
+    // IRQ
+    cps #CPSR_MODE_IRQ
+    ldr r2, =__stack_irq_top__
+    add r2, r2, r9
+    mov sp, r2
+
+    // SYS
+    cps #CPSR_MODE_SYSTEM
+    ldr r2, =__stack_sys_top__
+    add r2, r2, r9
+    mov sp, r2
+
+
+
+
+
+
+
+
+
+
+
     // get the value from Vector Base Address Register (VBAR) 
-    mrc p15, 0, r1, c12, c0, 0
+    // mrc p15, 0, r1, c12, c0, 0
 
     // copy 0x40 bytes from 0x8000 to the address stored in VBAR (typically 0x0000)
-    mov r0,#0x8000
-    ldmia r0!,{r2,r3,r4,r5,r6,r7,r8,r9}
-    stmia r1!,{r2,r3,r4,r5,r6,r7,r8,r9}
-    ldmia r0!,{r2,r3,r4,r5,r6,r7,r8,r9}
-    stmia r1!,{r2,r3,r4,r5,r6,r7,r8,r9}
+    // mov r0,#0x8000
+    // ldmia r0!,{r2,r3,r4,r5,r6,r7,r8,r9}
+    // stmia r1!,{r2,r3,r4,r5,r6,r7,r8,r9}
+    // ldmia r0!,{r2,r3,r4,r5,r6,r7,r8,r9}
+    // stmia r1!,{r2,r3,r4,r5,r6,r7,r8,r9}
       
     // set the stackpointer for the supervisor mode
-    mov sp,#0x5000
+    // mov sp,#0x5000
 
     // set the stackpointer for the irq mode
-    cps #CPSR_MODE_IRQ
-    mov sp,#0x4000
+    // cps #CPSR_MODE_IRQ
+    // mov sp,#0x4000
 
     // set the stackpointer for the system mode
-    cps #CPSR_MODE_SYSTEM
-    mov sp,#0x8000
+    // cps #CPSR_MODE_SYSTEM
+    // mov sp,#0x8000
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     bl disable_dcache
     bl disable_icache
@@ -108,9 +164,14 @@ reset_svc_mode:
     mov r4, #0
     mov r5, #0
 
+
+
+
+
 bss_clear_loop:
     // Write 4 bytes at a time (this is possible because the bss-Section is ALIGN(4))
     stmia r0!, {r2-r5}
+    
     // Continue until r0 isn't lower than r1 any more
     cmp r0, r1
     blo bss_clear_loop

@@ -24,7 +24,12 @@ class Yprintf {
 public:
     va_list ap;
     virtual ~Yprintf() {va_end(ap);}
-    virtual void yputc(char c) { putchar(c); } // define yours *****
+    virtual void yputc(char c) { 
+        if(c == '\n') {
+            putchar('\r');
+        }
+        putchar(c);
+    } // define yours *****
     void vaprintf(const char *fmt);
 };
 
