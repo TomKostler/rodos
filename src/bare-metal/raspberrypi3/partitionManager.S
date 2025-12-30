@@ -2,6 +2,11 @@
 
 .extern g_partition_ctx
 
+// Reserved Data for the changing image base address of the partition to switch to
+.section .data
+.align 4
+partition_base_address: 
+    .word 0x00000000
 
 
 .section ".text"
@@ -25,7 +30,8 @@
  * Function is called in SVC mode
 */
 partition_switch_boot:
-
+    
+    push    {r2}
     mov     r2, lr // Save return address to r2
     bl save_partition_context
 
@@ -54,12 +60,14 @@ boot_resume:
 save_partition_context:
     cpsid   if // Deactivates IRQ's and Fast IRQ's
 
+    pop     {r3} /* => Since r2, r3 were saved in switch_partition_caller and r12 before */
 
     /* Symbol g_partition_ctx points to a struct already allocated in 
       memory containing all necessary data for the complete context of an image */
+    push    {r12} /* => Such that r12 is not overwritten before saving it in the struct*/
     ldr     r12, =g_partition_ctx
 
-    
+
     /* Save User/System Registers r0-r14, with the needed offset for the struct g_partition_ctx */
     add     r1, r12, #16
     stmia   r1, {r0-r7}^
@@ -190,6 +198,7 @@ save_partition_context:
     msr     cpsr_c, r1 @ Change mode back to SVC
     @ ==============================================================================
 
+    pop {r12, r2}
     bx lr
 
 
@@ -372,9 +381,23 @@ switch_partition_caller:
     pop {r0-r12, lr}
     @ -----------------------------
 
+    /* Retrieve the argument of the SWI interrupt call indicating the link address of the partition */
+    pop {r0} 
+
+    /* save registers that are used in this function to the stack so that the 
+    whole context is correctly saved */
+    push {r2, r3}
+
+
+    ldr r3, =partition_base_address
+    str r0, [r3]
+
+    
 
     /* Save PC to r2, otherwise it gets overwritten */
     mov r2, lr
+
+
     bl save_partition_context
 
 
@@ -384,6 +407,8 @@ switch_partition_caller:
     bl asm_debug
     pop {r0-r12, lr}
     @ --------------------------
+
+
 
 
     /* To avoid cyclic call => Set the saved PC to a resume label */
@@ -398,8 +423,9 @@ switch_partition_caller:
      next image can check whether it was reached by a context switch*/
     ldr r0, =0xCAFEBABE
     
-    // Load the reset address of the other image (@TODO: Make it dynamically!)
-    ldr r1, =0x00008000
+    // Load the reset address of the partition to jump to, specified when calling the SWI
+    ldr r3, =partition_base_address
+    ldr r1, [r3]
     bx  r1
 
 caller_resume:

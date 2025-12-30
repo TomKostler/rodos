@@ -13,6 +13,11 @@
 #include "include/bcm2837.h"
 #include "include/asm_defines.h"
 #include "include/platform-parameter.h"
+#include "partitions_config.h"
+#include "partition_switch.h"
+
+
+extern char __image_link_base__[];
 
 namespace RODOS {
 
@@ -37,6 +42,24 @@ void Timer::init() {
 
     // enable interrupts global
     //hwEnableInterrupts(); // interrupts will be enabled with first context-load (IDLE-Thread)
+
+
+
+
+    // Perform a partition switch before executing the user code in order to init all 
+    // partitions to the same extent
+    if ((uintptr_t)__image_link_base__ != PARTITION_LAST_ADDRESS) {
+        uintptr_t target_address = PARTITION_LAST_ADDRESS;
+
+        asm volatile(
+            "mov r0, %[id] \n\t"
+            "svc %[imm]    \n\t"
+            : 
+            : [id] "r" (target_address),
+              [imm] "I" (SWI_PARTITION_SWITCH_BOOT)
+            : "r0", "memory"
+        );
+    }
 }
 
 /**

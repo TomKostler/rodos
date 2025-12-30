@@ -2,7 +2,15 @@
 #include "asm_defines.h"
 
 
-
-static inline void svc_partition_switch(void) {
-    asm volatile("svc %[imm]" :: [imm] "I" (SWI_PARTITION_SWITCH) : "memory");
+// Calls the SVC for the partition switch with the parameter in a r0,
+// such that the id can be read out again in the SVC call
+static inline void svc_partition_switch(unsigned int image_id) {
+    asm volatile(
+        "mov r0, %[id] \n\t"
+        "svc %[imm]    \n\t"
+        : 
+        : [id] "r" (image_id),
+          [imm] "I" (SWI_PARTITION_SWITCH)
+        : "r0", "memory"
+    );
 }

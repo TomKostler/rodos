@@ -67,6 +67,12 @@ swint:
     cmp r0, #SWI_CONTEXT_SWITCH
     beq context_switch
 
+    cmp r0, #SWI_PARTITION_SWITCH_BOOT
+    beq partition_switch_boot
+
+    cmp r0, #SWI_PARTITION_SWITCH
+    beq switch_partition_caller
+
     // if no swi number matches then go to the undefined handler
     .word 0xe7f000f0
 

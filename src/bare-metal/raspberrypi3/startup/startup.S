@@ -26,6 +26,22 @@ reset:
     // Disable FIQ and IRQ
     cpsid if
 
+
+
+    /* --- Check for Context Switch Magic Token => If so, the image is called because */
+    /* a partition switch happened in another image and this image is the image */
+    /* that was switched to --- */
+    ldr r1, =0xCAFEBABE
+    cmp r0, r1
+    ldreq pc, =switch_partition_callee
+    // -------------------------------------------------
+
+
+
+
+
+
+
     // Get the current PE mode into r0...
     mrs r0, cpsr
     and r0, r0, #CPSR_MODE_MASK
@@ -113,16 +129,6 @@ reset_svc_mode:
     // set the stackpointer for the system mode
     // cps #CPSR_MODE_SYSTEM
     // mov sp,#0x8000
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -66,9 +66,10 @@
 // SWI numbers
 #define SWI_START_IDLE 0
 #define SWI_CONTEXT_SWITCH 1
+#define SWI_PARTITION_SWITCH_BOOT 2
+#define SWI_PARTITION_SWITCH 3
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
-
 
 #endif /*_ASM_DEFINES_H_ */

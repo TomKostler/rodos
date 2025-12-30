@@ -7,7 +7,6 @@ _estack = 0x20020000;
 _Min_Heap_Size = 0x1000;
 _Min_Stack_Size = 0x400;
 
-
 MEMORY {
   ram (rwx)  : ORIGIN = 0x00008000, LENGTH = 511M
 
