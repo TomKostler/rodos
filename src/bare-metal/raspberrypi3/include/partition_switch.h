@@ -14,3 +14,15 @@ static inline void svc_partition_switch(unsigned int image_id) {
         : "r0", "memory"
     );
 }
+
+
+// Calls the SVC for switching through all partitions directly after boot of one partition
+// after initializing the hardware
+static inline void svc_boot_partition_switch() {
+    asm volatile(
+        "svc %[imm]    \n\t"
+        : 
+        : [imm] "I" (SWI_PARTITION_SWITCH_BOOT)
+        : "memory"
+    );
+}

@@ -8,7 +8,10 @@ _Min_Heap_Size = 0x1000;
 _Min_Stack_Size = 0x400;
 
 MEMORY {
-  ram (rwx)  : ORIGIN = 0x00008000, LENGTH = 511M
+  ram (rwx)  : ORIGIN = 0x00008000, LENGTH = 250M
+
+  /* Needed to share pointers to the stacks of different images for partition switching, put after every loaded image in the RAM */
+  shared_memory_images (rw)   : ORIGIN = 0x30000000, LENGTH = 4K
 }
 
 SECTIONS {
@@ -23,6 +26,15 @@ SECTIONS {
     *(.vfp11_veneer)
     *(.gnu.linkonce.t*)
   } > ram
+
+  __image_link_base__ = ORIGIN(ram);
+  __next_image_start__ = 0xFA08000;
+  PROVIDE_HIDDEN(__image_count__ = 3);
+  PROVIDE_HIDDEN(__image_index__ = 0);
+  __shared_ctx_slot_size__ = 0x400; /* 1 Slot = 1 KiB (>= sizeof(PartitionCtx)=168B) */
+  __shared_ctx_base__ = ORIGIN(shared_memory_images);
+  __shared_ctx_addr__ = __shared_ctx_base__ + __image_index__ * __shared_ctx_slot_size__;
+
 
 
   .ARM.extab : {
@@ -98,6 +110,15 @@ SECTIONS {
     . = . + _Min_Stack_Size;
     . = ALIGN(4);
   } > ram
+
+
+
+  /* Shared section for the contexts of different partitions/images */
+  .partition_ctx __shared_ctx_addr__ (NOLOAD) : AT(__shared_ctx_addr__) {
+    . = ALIGN(4);
+    KEEP(*(.partition_ctx))
+    . = ALIGN(__shared_ctx_slot_size__);
+  } > shared_memory_images
 
 
 

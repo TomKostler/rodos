@@ -16,9 +16,6 @@ void asm_debug(uint32_t id) {
 
 
 
-
-
-
 struct PartitionCtx {
 	// Registers without a mode
 	uint32_t VBAR;    // Vector Base Address Register

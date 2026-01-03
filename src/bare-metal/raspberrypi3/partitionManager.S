@@ -21,7 +21,7 @@ partition_base_address:
 .type  switch_partition_callee, %function
 
 .extern asm_debug @ <--- @TODO: Delete if no Debug prints are needed anymore
-
+.extern __next_image_start__
 
 
 
@@ -42,14 +42,15 @@ partition_switch_boot:
     str     r1, [r12, #76]
 
 
-    /* One-way chainload: jump to image at 0x10000000 */ 
-    ldr     r0, =0x10000000    
-    bx      r0                 
+    /* One-way chainload: jump to image with starting address defined in current linkerscript */
+    ldr     r0, =__next_image_start__
+    bx      r0
+
 
 
 boot_resume:
     bx      r2
-    
+
 
 
 
@@ -60,11 +61,11 @@ boot_resume:
 save_partition_context:
     cpsid   if // Deactivates IRQ's and Fast IRQ's
 
-    pop     {r3} /* => Since r2, r3 were saved in switch_partition_caller and r12 before */
+    @ pop     {r3} /* => Since r2, r3 were saved in switch_partition_caller and r12 before */
 
     /* Symbol g_partition_ctx points to a struct already allocated in 
       memory containing all necessary data for the complete context of an image */
-    push    {r12} /* => Such that r12 is not overwritten before saving it in the struct*/
+    @ push    {r12} /* => Such that r12 is not overwritten before saving it in the struct*/
     ldr     r12, =g_partition_ctx
 
 
@@ -198,7 +199,7 @@ save_partition_context:
     msr     cpsr_c, r1 @ Change mode back to SVC
     @ ==============================================================================
 
-    pop {r12, r2}
+    @ pop {r12, r2}
     bx lr
 
 
@@ -386,7 +387,7 @@ switch_partition_caller:
 
     /* save registers that are used in this function to the stack so that the 
     whole context is correctly saved */
-    push {r2, r3}
+    @ push {r2, r3}
 
 
     ldr r3, =partition_base_address
