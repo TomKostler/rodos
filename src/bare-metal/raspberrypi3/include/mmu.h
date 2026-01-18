@@ -44,7 +44,7 @@ typedef union {
 void enable_mmu();
 void disable_mmu();
 
-void init_mmu();
+void init_mmu_for_current_partition();
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -1,10 +1,19 @@
  #include "include/asm_defines.h"
 
-.extern g_partition_ctx
+
+
+.section .partition_ctx
+.align 4
+.global g_partition_ctx
+g_partition_ctx:
+    .space 0x400
+
+
 
 // Reserved Data for the changing image base address of the partition to switch to
 .section .data
 .align 4
+.globl partition_base_address
 partition_base_address: 
     .word 0x00000000
 
@@ -22,6 +31,8 @@ partition_base_address:
 
 .extern asm_debug @ <--- @TODO: Delete if no Debug prints are needed anymore
 .extern __next_image_start__
+.extern partition_switch_mmu_caller
+.extern partition_switch_mmu_callee
 
 
 
@@ -29,17 +40,42 @@ partition_base_address:
 /** Partition Switch
  * Function is called in SVC mode
 */
-partition_switch_boot:
-    
+partition_switch_boot:    
     push    {r2}
     mov     r2, lr // Save return address to r2
+
+
     bl save_partition_context
+
 
     // Save the correct PC (PC of label boot_resume, otherwise cyclic calls 
     // with the jump)
     ldr     r12, =g_partition_ctx
     ldr     r1, =boot_resume
     str     r1, [r12, #76]
+
+
+
+    @ ----------------------------------------------------------------
+    @ TURN OFF MMU (before branch to different image/partition)
+    @ ----------------------------------------------------------------
+    @ 1. Data Cache Clean (und Invalidate)
+    dsb
+    mrc     p15, 0, r1, c1, c0, 0
+    bic     r1, r1, #0x1000         @ I
+    bic     r1, r1, #0x4            @ C
+    bic     r1, r1, #0x1            @ M
+    mcr     p15, 0, r1, c1, c0, 0
+    isb
+    mcr     p15, 0, r0, c8, c7, 0   @ TLBIALL
+    dsb
+    isb
+
+    @ 2. Disable MMU & Caches
+    mrc     p15, 0, r1, c1, c0, 0
+    bic     r1, r1, #0x5            @ Clear M (0x1) and C (0x4)
+    mcr     p15, 0, r1, c1, c0, 0
+    isb
 
 
     /* One-way chainload: jump to image with starting address defined in current linkerscript */
@@ -76,10 +112,14 @@ save_partition_context:
     stmia   r1, {r8-r14}^
 
 
+
+
+
+
     /* Save registers needed for system config 
-        VBAR (Vector Base Address Register => Stores Baseaddress of exception vector table)
-        SCTLR (System Control Register => MMU, Caches etc.)
-        TTBR0 (Translation Table Base Register 0 => Page Tables etc.)
+       VBAR (Vector Base Address Register => Stores Baseaddress of exception vector table)
+       SCTLR (System Control Register => MMU, Caches etc.)
+       TTBR0 (Translation Table Base Register 0 => Page Tables etc.)
      */
     mrc     p15, 0, r0, c12, c0, 0      @ VBAR
     str     r0, [r12, #0]
@@ -87,6 +127,7 @@ save_partition_context:
     str     r0, [r12, #4]
     mrc     p15, 0, r0, c2, c0, 0       @ TTBR0
     str     r0, [r12, #8]
+
 
     /* Save the image_link_base */
     ldr     r0, =__image_link_base__
@@ -96,10 +137,12 @@ save_partition_context:
     /* Save the User PC that's was stored in r2 before */
     str     r2, [r12, #76]
 
+
     /* Since the User CPSR (Current Program Status Register) is saved in a svc 
     to the SPSR, => save the SPSR to get the CPSR */
     mrs     r3, spsr
     str     r3, [r12, #80]
+
 
     /* Save the current SVC SP/LR/SPSR (Offsets 84,88,92) */
     mov     r4, sp
@@ -109,8 +152,6 @@ save_partition_context:
 
     /* Save SVC CPSR */
     mrs     r5, cpsr
-
-
 
 
     @ ==============================================================================
@@ -375,13 +416,6 @@ load_partition_context:
  * and branching to the new image
 */
 switch_partition_caller:
-    @ --- @TODO: DEBUG 1: Start Caller ---
-    push {r0-r12, lr}
-    mov r0, #0x1            @ ID 1
-    bl asm_debug
-    pop {r0-r12, lr}
-    @ -----------------------------
-
     /* Retrieve the argument of the SWI interrupt call indicating the link address of the partition */
     pop {r0} 
 
@@ -402,16 +436,6 @@ switch_partition_caller:
     bl save_partition_context
 
 
-    @ --- @TODO: DEBUG 2: After Save ---
-    push {r0-r12, lr}
-    mov r0, #0x2            @ ID 2
-    bl asm_debug
-    pop {r0-r12, lr}
-    @ --------------------------
-
-
-
-
     /* To avoid cyclic call => Set the saved PC to a resume label */
     ldr     r12, =g_partition_ctx
     ldr     r0, [r12, #76] @ Load the saved PC from offset 76
@@ -419,10 +443,14 @@ switch_partition_caller:
     str     r1, [r12, #76] @ Overwrite saved PC
 
 
+    /* Set the correct MMU settings before the switch  */
+    bl      partition_switch_mmu_caller
+
 
     /* Write the Magic number 0xCAFEBABE into r0 such that the
      next image can check whether it was reached by a context switch*/
     ldr r0, =0xCAFEBABE
+
     
     // Load the reset address of the partition to jump to, specified when calling the SWI
     ldr r3, =partition_base_address
@@ -438,17 +466,10 @@ caller_resume:
 
 /*
  * Entry point of the image that should be switched to directly after the reset.
- * Handles the loading of a partition.
+ * Handles the loading of the correct MMU settings and the loading of a partition.
 */
 switch_partition_callee:
-    @ --- DEBUG 3: Entry Callee ---
-    ldr sp, =__stack_svc_top__ @ Since we have no stack, we need to set it in order to write to UART
-    push {r0-r12, lr}
-    mov r0, #0x3            @ ID 3
-    bl asm_debug
-    pop {r0-r12, lr}
-    @ -------------------------------
-
+    bl partition_switch_mmu_callee
 
     bl load_partition_context
 

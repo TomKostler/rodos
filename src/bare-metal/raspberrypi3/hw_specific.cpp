@@ -83,7 +83,7 @@ void hwInit() {
     // Init UART
     uart_stdout.init();
 
-    init_mmu();
+    init_mmu_for_current_partition();
 
     enable_dcache();
     enable_icache();

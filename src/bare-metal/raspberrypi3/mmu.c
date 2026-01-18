@@ -10,13 +10,26 @@
 #include "include/bcm2837.h"
 #include "include/mmu.h"
 #include "include/asm_defines.h"
+#include "partitionContext.h"
+#include "partitions_config.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// defined by the linker script
+// Defined by the linker script
 extern uint32_t _mmu_level1_table_start_[4096 * 4];
+
+
+extern uint32_t __image_link_base__;
+extern uint32_t __ram_end__;
+extern uint32_t __shared_ctx_base__;
+extern uint32_t __image_index__;
+extern uint32_t __image_count__;
+extern uint32_t partition_base_address;
+
+extern PartitionEntry __partition_table_start__[];
+
 
 void enable_mmu() {
     __asm volatile(
@@ -46,58 +59,169 @@ void disable_mmu() {
       : "r0", "memory");
 }
 
-void createPageTableEntries(uint32_t physicalAdr, uint32_t virtualAdr, uint32_t length, bool cacheable) {
+
+void createPageTableEntries(uint32_t physical_adr, uint32_t virtual_adr, uint32_t length, bool cacheable, bool readOnly, bool executeNever) {
     mmu_level1_section_t section;
-    section.value      = 0;
-    section.bits._zero = 0;
-    section.bits._one  = 1;
+    section.value       = 0;
+    section.bits._zero  = 0;
+    section.bits._one   = 1;
+    section.bits.domain = 0;
+
     if(cacheable) {
-        // If TEX remap is disabled (should be) this bits stand for
-        // Outer and Inner Write-Back, no Write-Allocate (page 3619 - ARMv8 Reference Manual)
+        // Outer and Inner Write-Back, no Write-Allocate
         section.bits.b = 1;
         section.bits.c = 1;
     }
 
-    // Only the top 12 bits are needed as base addresses
-    uint32_t virtualBase  = virtualAdr >> 20;
-    uint32_t physicalBase = physicalAdr >> 20;
-    uint32_t entries      = length >> 20;
+    // Access Permission Bits
+    section.bits.ap1_0 = 3;                // Access Permitted for User & Privileged
+    section.bits.ap2   = readOnly ? 1 : 0; // Read/Write or ReadOnly Access
 
-    for(; entries > 0; ++physicalBase, ++virtualBase, --entries) {
-        section.bits.base_address             = physicalBase & 0x0FFFu;
-        _mmu_level1_table_start_[virtualBase] = section.value;
+    // Execute Never Bit (XN)
+    section.bits.xn = executeNever ? 1 : 0;
+
+    uint32_t physical_base = physical_adr >> 20;
+
+
+    uint32_t start_section = virtual_adr >> 20;
+
+    if(length == 0) return;
+
+    // (virtual_adr + length - 1) gives the address of the last byte.
+    uint32_t end_section = (virtual_adr + length - 1) >> 20;
+    uint32_t entries     = end_section - start_section + 1;
+
+    for(uint32_t i = 0; i < entries; ++i) {
+        section.bits.base_address = (physical_base + i) & 0x0FFFu;
+        // Use loop index to increment virtual section index
+        _mmu_level1_table_start_[start_section + i] = section.value;
     }
-
-    // (TLBIALL) TLB Invalidate All entries (value in r0 is ignored)
-    __asm volatile("mcr p15, 0, r0, c8, c7, 0\n\t");
 }
 
-void init_mmu() {
-    __asm volatile(
-      "mvn r0, #0\n\t"
-      // (DACR) Domain Access Control Register
-      // Set 11 to each domain
-      // 11 = Manager. Accesses are not checked against the permission bits in the translation tables.
-      "mcr p15, 0, r0, c3, c0, 0\n\t"
-      // Load and set the page table address
-      "ldr r0, =_mmu_level1_table_start_\n\t"
-      // (TTBR0) Translation Table Base Register 0
-      "mcr p15, 0, r0, c2, c0, 0\n\t"
-      // (TTBR1) Translation Table Base Register 1
-      "mcr p15, 0, r0, c2, c0, 1\n\t"
-      :
-      :
-      : "r0", "memory");
+// Is called for each image/partition when they are first booted up
+void init_mmu_for_current_partition() {
+    // Reset Page Table. If the MMU tries to access an address that was not explicitly mapped,
+    // Translation Fault is triggered
+    for(int i = 0; i < 4096; i++) { _mmu_level1_table_start_[i] = 0; }
 
-    // The complete RAM (from 0 to PERIPHERALS_BASE) could be cached
-    createPageTableEntries(0x00000000, 0x00000000, PERIPHERALS_BASE, true);
 
-    // and do not cache the peripherals
-    createPageTableEntries(PERIPHERALS_BASE, PERIPHERALS_BASE, PERIPHERALS_SIZE, false);
-    createPageTableEntries(ARM_LOCAL_BASE, ARM_LOCAL_BASE, 0x00100000, false);
+    // Set Domain to Client (01), since we need to set access rights (with register DACR)
+    __asm volatile("mov r0, #1\n\t"
+                   "mcr p15, 0, r0, c3, c0, 0\n\t"
+                   :
+                   :
+                   : "r0");
+
+
+    // Explicitly map the memory needed for the current partition
+    uint32_t partition_start  = (uint32_t)&__image_link_base__;
+    uint32_t partition_end    = (uint32_t)&__ram_end__;
+    uint32_t partition_length = partition_end - partition_start;
+
+    // Enable RWX for the current partition
+    createPageTableEntries(partition_start, partition_start, partition_length, true, false, false);
+
+
+    // Map the shared memory between partitions as RW, but not X
+    uint32_t shared_base = (uint32_t)&__shared_ctx_base__;
+    createPageTableEntries(shared_base, shared_base, 0x100000, true, false, true); // 1MB pauschal
+
+
+    // Map the peripherals as RW, non-execute and non-cacheable for IO
+    createPageTableEntries(PERIPHERALS_BASE, PERIPHERALS_BASE, PERIPHERALS_SIZE, false, false, true);
+    createPageTableEntries(ARM_LOCAL_BASE, ARM_LOCAL_BASE, 0x00100000, false, false, true);
+
+
+    // -------------------------------------------------------------------
+    // 7. Enable MMU
+    // -------------------------------------------------------------------
+    uintptr_t table_addr = (uintptr_t)_mmu_level1_table_start_;
+    // Since table is (4096 * 4 Bytes / 0x4000) large
+    for(uint32_t i = 0; i < 0x4000; i += 32) { // 32 Bytes = Cache Line Size
+        // Clean and Invalidate Data Cache
+        __asm volatile("mcr p15, 0, %0, c7, c14, 1" : : "r"(table_addr + i));
+    }
+
+    __asm volatile("dsb\n\t"
+                   "isb\n\t"
+                   "mcr p15, 0, r0, c7, c5, 0" // Invalidate I-Cache
+                   :
+                   :
+                   : "r0");
+
+    // Flush TLB
+    __asm volatile("mcr p15, 0, r0, c8, c7, 0" : : : "r0");
+
+    // Load Table Base Register
+    __asm volatile("mcr p15, 0, %0, c2, c0, 0" : : "r"(table_addr));
 
     enable_mmu();
 }
+
+// Only flush specific entries for better0 performance
+static void flush_page_table_entries(uint32_t vaddr, uint32_t length) {
+    uint32_t  startIdx = vaddr >> 20;
+    uint32_t  endIdx   = (vaddr + length - 1) >> 20;
+    uintptr_t table    = (uintptr_t)_mmu_level1_table_start_;
+
+    // Loop through every affected 1MB section in the Page Table
+    for(uint32_t i = startIdx; i <= endIdx; ++i) {
+        uintptr_t entry = table + (i * 4);
+        // Push the entry from CPU Cache to RAM and invalidate the cache line
+        __asm volatile("mcr p15, 0, %0, c7, c14, 1" : : "r"(entry));
+    }
+    __asm volatile("dsb");
+}
+
+
+// Is called in the old partition shortly before switching to the new partition (in partitionManager)
+// Configures the MMU such that the new Partition can run accordingly
+void partition_switch_mmu_caller() {
+
+    uint32_t next_partition_start = partition_base_address;
+    uint32_t num_partitions       = (uint32_t)&__image_count__;
+    uint32_t next_partition_len;
+    for(uint32_t i = 0; i < num_partitions; i++) {
+        if(partition_base_address == __partition_table_start__[i].start_addr) { next_partition_len = __partition_table_start__[i].length; }
+    }
+
+    // uint32_t next_partition_len = partition_lengths[0];
+    //  Set the new partition to RWX
+    createPageTableEntries(next_partition_start, next_partition_start, next_partition_len, true, false, false);
+    flush_page_table_entries(next_partition_start, next_partition_len);
+
+
+    // Update the MMU by flushing the I-Cache and TLB
+    __asm volatile("mcr p15, 0, r0, c7, c5, 0" : : : "r0");
+    __asm volatile("mcr p15, 0, r0, c8, c7, 0" : : : "r0");
+    __asm volatile("dsb\n\tisb");
+}
+
+// Is called in the partition that was switched to
+// Configures the MMU to allow no access to any old partitions anymore
+void partition_switch_mmu_callee() {
+    uint32_t current_index  = (uint32_t)&__image_index__;
+    uint32_t num_partitions = (uint32_t)&__image_count__;
+
+
+    // Set every partition that is not used to no access at all, except for the current (the new) one
+    for(uint32_t i = 0; i < num_partitions; i++) {
+        if(i == current_index) { continue; }
+
+        uint32_t other_start = __partition_table_start__[i].start_addr;
+        uint32_t other_len   = __partition_table_start__[i].length;
+
+        createPageTableEntries(other_start, other_start, other_len, true, true, false);
+        flush_page_table_entries(other_start, other_len);
+    }
+
+
+    // Update the MMU by flushing the I-Cache and TLB
+    __asm volatile("mcr p15, 0, r0, c7, c5, 0" : : : "r0");
+    __asm volatile("mcr p15, 0, r0, c8, c7, 0" : : : "r0");
+    __asm volatile("dsb\n\tisb");
+}
+
 
 #ifdef __cplusplus
 } // end extern "C"

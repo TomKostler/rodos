@@ -8,10 +8,10 @@ _Min_Heap_Size = 0x1000;
 _Min_Stack_Size = 0x400;
 
 MEMORY {
-  ram (rwx)  : ORIGIN = 0x00100000, LENGTH = 250M
+  ram (rwx)  : ORIGIN = $RAM_ORIGIN, LENGTH = $RAM_LENGTH
 
   /* Needed to share pointers to the stacks of different images for partition switching, put after every loaded image in the RAM */
-  shared_memory_images (rw)   : ORIGIN = 0x30000000, LENGTH = 4K
+  shared_memory_images (rw)   : ORIGIN = $SHARED_ORIGIN, LENGTH = $SHARED_LENGTH
 }
 
 SECTIONS {
@@ -28,19 +28,13 @@ SECTIONS {
   } > ram
 
   __image_link_base__ = ORIGIN(ram);
-  __next_image_start__ = 0x0FB00000;
-  PROVIDE_HIDDEN(__image_count__ = 3);
-  PROVIDE_HIDDEN(__image_index__ = 0);
+  __next_image_start__ = $NEXT_IMAGE_ADDRESS;
+  PROVIDE_HIDDEN(__image_count__ = $IMG_COUNT);
+  PROVIDE_HIDDEN(__image_index__ = $IMG_INDEX);
   __shared_ctx_slot_size__ = 0x400; /* 1 Slot = 1 KiB (>= sizeof(PartitionCtx)=168B) */
   __shared_ctx_base__ = ORIGIN(shared_memory_images);
   __shared_ctx_addr__ = __shared_ctx_base__ + __image_index__ * __shared_ctx_slot_size__;
 
-
-  PROVIDE(__partition_table_start__ = .);
-  LONG(0x00100000); LONG(250M);
-        LONG(0x0FB00000); LONG(250M);
-        LONG(0x1F500000); LONG(250M);
-  PROVIDE(__partition_table_end__ = .);
 
 
 
@@ -58,9 +52,7 @@ SECTIONS {
     . = ALIGN(4);
 
     PROVIDE(__partition_table_start__ = .);
-    LONG(0x00100000); LONG(250M);
-        LONG(0x0FB00000); LONG(250M);
-        LONG(0x1F500000); LONG(250M);
+    $PARTITION_TABLE_CONTENT
     PROVIDE(__partition_table_end__ = .);
 
     *(.rodata)

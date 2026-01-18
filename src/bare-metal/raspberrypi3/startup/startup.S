@@ -39,9 +39,6 @@ reset:
 
 
 
-
-
-
     // Get the current PE mode into r0...
     mrs r0, cpsr
     and r0, r0, #CPSR_MODE_MASK
