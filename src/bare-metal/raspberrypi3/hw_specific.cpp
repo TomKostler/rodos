@@ -18,6 +18,7 @@
 #include "include/asm_defines.h"
 #include "include/mmu.h"
 #include "include/platform-parameter.h"
+#include "partitions_config.h"
 
 volatile long* contextT;
 
@@ -27,6 +28,8 @@ namespace RODOS {
 /* CONTEXT SWITCH AND INTERRUPT HANDLING */
 /*********************************************************************************************/
 
+static int32_t current_partition_index = -1; 
+
 extern RODOS::Atomic<bool> yieldSchedulingLock;
 
 extern "C" {
@@ -35,6 +38,11 @@ extern void UART1_IRQHandler();
 extern void enable_dcache();
 extern void enable_icache();
 extern void enable_branch_predictor();
+extern void switch_partition_from_irq(uint32_t nextPartitionAddr);
+extern char __image_link_base__[];
+
+static const uint32_t NUM_PARTITIONS = (uint32_t)&__image_count__;
+
 
 /*
  * Handles the hardware interrupt after saving the context and determines who has raised the interrupt
@@ -46,9 +54,10 @@ void handleInterrupt(long* context) {
         // calc next ticktime (current time plus 'Timer::microsecondsInterval' <- is private)
         uint32_t nextTick = read32(SYSTEM_TIMER_CNT_LOW) + PARAM_TIMER_INTERVAL; //alle 10ms
 
-        if (yieldSchedulingLock == false) {
-            schedulerWrapper(context);
-        }
+        // if (yieldSchedulingLock == false) {
+        //     schedulerWrapper(context);
+        // }
+        
 
         // set next tick time
         write32(SYSTEM_TIMER_COMPARE1, nextTick);
@@ -57,6 +66,31 @@ void handleInterrupt(long* context) {
         // and the corresponding interrupt request line.
         // (BCM2835 ARM Peripherals - Page 172)
         write32(SYSTEM_TIMER_BASE, BIT(SYSTEM_TIMER_CONTROL_MATCH1));
+
+
+
+
+        // -------------------------------------------------------------
+        // Round-Robin Partition Switch Logic
+        // -------------------------------------------------------------
+
+        // Determine the current partition index if not already done
+        if (current_partition_index == -1) {
+             uint32_t current_base = (uint32_t)__image_link_base__;
+             for (uint32_t i = 0; i < NUM_PARTITIONS; i++) {
+                 if (__partition_table_start__[i].start_addr == current_base) {
+                     current_partition_index = (int32_t)i;
+                     break;
+                 }
+             }
+        }
+
+        // Get the next partition's address in a round-robin manner
+        int32_t next_index = (current_partition_index + 1) % ((int32_t)NUM_PARTITIONS);
+        uint32_t next_partition_addr = __partition_table_start__[next_index].start_addr;
+
+        switch_partition_from_irq(next_partition_addr);
+        
     }
 
     //handles the uart interrupt

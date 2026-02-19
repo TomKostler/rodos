@@ -477,6 +477,62 @@ switch_partition_callee:
 
 
 
+
+
+
+
+
+
+.globl switch_partition_from_irq
+switch_partition_from_irq:
+
+    mov     r4, lr
+    mrs     r5, spsr
+
+    and     r6, r5, #0x1F
+    cmp     r6, #0x10
+    bne     abort_switch 
+
+    ldr     r3, =partition_base_address
+    str     r0, [r3]
+
+
+    msr     cpsr_c, #0xD3   // SVC-Mode, IRQ/FIQ disabled
+
+
+    sub     r2, r4, #4
+    msr     spsr_cxsf, r5
+    
+    
+    bl      save_partition_context
+
+    
+    ldr     r12, =g_partition_ctx
+    ldr     r1, =irq_resume_svc
+    str     r1, [r12, #76]
+
+    
+    bl      partition_switch_mmu_caller
+
+    ldr     r0, =0xCAFEBABE
+    ldr     r3, =partition_base_address
+    ldr     r1, [r3]
+    bx      r1
+
+irq_resume_svc:
+    movs    pc, lr
+
+
+abort_switch:
+    bx      lr
+    
+
+
+
+
+
+
+
 .size  partition_switch_boot, .-partition_switch_boot
 .size  save_partition_context, .-save_partition_context
 .size  load_partition_context, .-load_partition_context
