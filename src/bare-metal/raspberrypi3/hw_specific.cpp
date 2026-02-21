@@ -38,7 +38,7 @@ extern void UART1_IRQHandler();
 extern void enable_dcache();
 extern void enable_icache();
 extern void enable_branch_predictor();
-extern void switch_partition_from_irq_caller(uint32_t nextPartitionAddr);
+extern void switch_partition_from_irq_caller(uint32_t nextPartitionAddr); 
 extern char __image_link_base__[];
 
 static const uint32_t NUM_PARTITIONS = (uint32_t)&__image_count__;
@@ -69,7 +69,6 @@ void handleInterrupt(long* context) {
 
 
 
-
         // -------------------------------------------------------------
         // Round-Robin Partition Switch Logic
         // -------------------------------------------------------------
@@ -89,8 +88,7 @@ void handleInterrupt(long* context) {
         int32_t next_index = (current_partition_index + 1) % ((int32_t)NUM_PARTITIONS);
         uint32_t next_partition_addr = __partition_table_start__[next_index].start_addr;
 
-        switch_partition_from_irq_caller(next_partition_addr);
-        
+        switch_partition_from_irq_caller(next_partition_addr);        
     }
 
     //handles the uart interrupt
