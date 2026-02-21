@@ -10,13 +10,11 @@ extern "C" {
 		uint32_t VBAR;    // Vector Base Address Register
 		uint32_t SCTLR;   // System Control Register
 		uint32_t TTBR0;   // Translation Table Base
-		// uint32_t DACR;    // Domain Access Control => Not needed since identity mapping in MMU used
+		// uint32_t DACR; // Domain Access Control => Not needed since identity mapping in MMU used
 		
 
 
 		uint32_t image_link_base;
-
-
 
 
 		// User Mode registers

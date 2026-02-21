@@ -184,7 +184,7 @@ static void flush_page_table_entries(uint32_t vaddr, uint32_t length) {
 void partition_switch_mmu_caller() {
 
     uint32_t next_partition_start = partition_base_address;
-    uint32_t num_partitions = (uint32_t)&__image_count__;
+    uint32_t num_partitions       = (uint32_t)&__image_count__;
     uint32_t next_partition_len;
     for(uint32_t i = 0; i < num_partitions; i++) {
         if(partition_base_address == __partition_table_start__[i].start_addr) { next_partition_len = __partition_table_start__[i].length; }
@@ -204,7 +204,7 @@ void partition_switch_mmu_caller() {
 // Is called in the partition that was switched to
 // Configures the MMU to allow no access to any old partitions anymore
 void partition_switch_mmu_callee() {
-    uint32_t current_index = (uint32_t)&__image_index__;
+    uint32_t current_index  = (uint32_t)&__image_index__;
     uint32_t num_partitions = (uint32_t)&__image_count__;
 
 
@@ -213,7 +213,7 @@ void partition_switch_mmu_callee() {
         if(i == current_index) { continue; }
 
         uint32_t other_start = __partition_table_start__[i].start_addr;
-        uint32_t other_len = __partition_table_start__[i].length;
+        uint32_t other_len   = __partition_table_start__[i].length;
 
         createPageTableEntries(other_start, other_start, other_len, true, true, false, true);
         flush_page_table_entries(other_start, other_len);

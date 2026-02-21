@@ -29,7 +29,10 @@ partition_base_address:
 .globl switch_partition_callee
 .type  switch_partition_callee, %function
 
-.extern asm_debug @ <--- @TODO: Delete if no Debug prints are needed anymore
+.globl switch_partition_from_irq_caller
+.type  switch_partition_from_irq_caller, %function
+
+
 .extern __next_image_start__
 .extern partition_switch_mmu_caller
 .extern partition_switch_mmu_callee
@@ -475,16 +478,12 @@ switch_partition_callee:
 
 
 
-
-
-
-
-
-
-
-
-.globl switch_partition_from_irq
-switch_partition_from_irq:
+/*
+ * Caller Function that initiates the the partition switch, if the time slice for the current one is over, 
+ * indicated by the firing of the hardware timer interupt.
+ * Since we are now in the IRQ mode we cannot use the svc partition switch functions from above. 
+*/
+switch_partition_from_irq_caller:
 
     mov     r4, lr
     mrs     r5, spsr
@@ -526,8 +525,6 @@ irq_resume_svc:
 abort_switch:
     bx      lr
     
-
-
 
 
 
