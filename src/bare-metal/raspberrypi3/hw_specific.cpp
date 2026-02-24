@@ -40,8 +40,13 @@ extern void enable_icache();
 extern void enable_branch_predictor();
 extern void switch_partition_from_irq_caller(uint32_t nextPartitionAddr); 
 extern char __image_link_base__[];
+extern char __partition_switch_interval_ticks__;
 
 static const uint32_t NUM_PARTITIONS = (uint32_t)&__image_count__;
+
+
+// Counter used to count down to when a partition switch should happen in the interrupt
+uint32_t counter_partition_switch_interval_ticks = (uint32_t)&__partition_switch_interval_ticks__;
 
 
 /*
@@ -68,27 +73,33 @@ void handleInterrupt(long* context) {
         write32(SYSTEM_TIMER_BASE, BIT(SYSTEM_TIMER_CONTROL_MATCH1));
 
 
+        counter_partition_switch_interval_ticks--;
+        if (counter_partition_switch_interval_ticks == 0) {
 
-        // -------------------------------------------------------------
-        // Round-Robin Partition Switch Logic
-        // -------------------------------------------------------------
+            counter_partition_switch_interval_ticks = (uint32_t)&__partition_switch_interval_ticks__;
 
-        // Determine the current partition index if not already done
-        if (current_partition_index == -1) {
-             uint32_t current_base = (uint32_t)__image_link_base__;
-             for (uint32_t i = 0; i < NUM_PARTITIONS; i++) {
-                 if (__partition_table_start__[i].start_addr == current_base) {
-                     current_partition_index = (int32_t)i;
-                     break;
+            // -------------------------------------------------------------
+            // Round-Robin Partition Switch Logic
+            // -------------------------------------------------------------
+
+            // Determine the current partition index if not already done
+            if (current_partition_index == -1) {
+                 uint32_t current_base = (uint32_t)__image_link_base__;
+                 for (uint32_t i = 0; i < NUM_PARTITIONS; i++) {
+                     if (__partition_table_start__[i].start_addr == current_base) {
+                         current_partition_index = (int32_t)i;
+                         break;
+                     }
                  }
-             }
+            }
+
+            // Get the next partition's address in a round-robin manner
+            int32_t next_index = (current_partition_index + 1) % ((int32_t)NUM_PARTITIONS);
+            uint32_t next_partition_addr = __partition_table_start__[next_index].start_addr;
+
+            switch_partition_from_irq_caller(next_partition_addr);
         }
-
-        // Get the next partition's address in a round-robin manner
-        int32_t next_index = (current_partition_index + 1) % ((int32_t)NUM_PARTITIONS);
-        uint32_t next_partition_addr = __partition_table_start__[next_index].start_addr;
-
-        switch_partition_from_irq_caller(next_partition_addr);        
+        
     }
 
     //handles the uart interrupt

@@ -34,6 +34,7 @@ SECTIONS {
   __shared_ctx_slot_size__ = 0x400; /* 1 Slot = 1 KiB (>= sizeof(PartitionCtx)=168B) */
   __shared_ctx_base__ = ORIGIN(shared_memory_images);
   __shared_ctx_addr__ = __shared_ctx_base__ + __image_index__ * __shared_ctx_slot_size__;
+  __partition_switch_interval_ticks__ = $TICKS_VALUE;
 
 
 
