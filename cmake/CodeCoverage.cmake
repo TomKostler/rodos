@@ -129,7 +129,7 @@ elseif(NOT CMAKE_COMPILER_IS_GNUCXX)
     message(FATAL_ERROR "Compiler is not GNU gcc! Aborting...")
 endif()
 
-set(COVERAGE_COMPILER_FLAGS "-g -fprofile-arcs -ftest-coverage"
+set(COVERAGE_COMPILER_FLAGS "-g -fprofile-arcs -ftest-coverage -fprofile-update=atomic"
     CACHE INTERNAL "")
 
 set(CMAKE_CXX_FLAGS_COVERAGE
@@ -266,14 +266,12 @@ function(setup_lcov_coverage)
 
     # Show where to find the lcov info report
     add_custom_command(TARGET ${Coverage_NAME}_collect POST_BUILD
-        COMMAND ;
-        COMMENT "Lcov code coverage info report saved in ${Coverage_NAME}.info."
+        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --cyan "Lcov code coverage info report saved in ${Coverage_NAME}.info"
     )
 
     # Show info where to find the report
     add_custom_command(TARGET ${Coverage_NAME}_collect POST_BUILD
-        COMMAND ;
-        COMMENT "Open ./${Coverage_NAME}/index.html in your browser to view the coverage report."
+        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --cyan "Open ./${Coverage_NAME}/index.html in your browser to view the coverage report"
     )
 
 endfunction() # setup_lcov_coverage

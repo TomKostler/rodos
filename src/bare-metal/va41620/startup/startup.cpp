@@ -38,19 +38,8 @@ inline void memoryBarrier(){
     asm volatile("" : : : "memory");
 }
 
-void waitAbout5Seconds(){
-    constexpr int32_t seconds { 5 };
-    constexpr int32_t frequencyHz { 20'000'000 };
-    constexpr int32_t approximateCyclesPerLoop { 3 };
-    constexpr int32_t totalLoops { (frequencyHz/approximateCyclesPerLoop)*seconds };
-    for(int32_t i { 0 }; i<totalLoops;i++){
-        asm volatile("");
-    }
-}
 
 extern "C" [[noreturn, gnu::used]] void Reset_Handler(){
-    //TODO remove before flight
-    waitAbout5Seconds();
     memoryBarrier();
     initDataSection();
     initBssSection();

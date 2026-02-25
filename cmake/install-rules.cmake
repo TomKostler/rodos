@@ -37,20 +37,14 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/api/
     DESTINATION ${rodos_INSTALL_INCLUDEDIR}/api
     FILES_MATCHING PATTERN "*.h"
 )
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/${port_dir}/
-    DESTINATION ${rodos_INSTALL_INCLUDEDIR}/src/${port_dir}
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/
+    DESTINATION ${rodos_INSTALL_INCLUDEDIR}/src/
     FILES_MATCHING PATTERN "*.h"
 )
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/support/support-libs/
     DESTINATION ${rodos_INSTALL_INCLUDEDIR}/support/support-libs
     FILES_MATCHING PATTERN "*.h"
 )
-if (is_port_baremetal)
-    INSTALL(DIRECTORY ${CMAKE_SOURCE_DIR}/src/bare-metal-generic/
-        DESTINATION ${rodos_INSTALL_INCLUDEDIR}/src/bare-metal-generic
-        FILES_MATCHING PATTERN "*.h"
-    )
-endif ()
 
 # Some of the directories_to_include must also be included in the INSTALL_INTERFACE. For simplicity
 # I add all of them and use this foreach loop cause I don't know how to do this the install(TARGET

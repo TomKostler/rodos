@@ -301,7 +301,7 @@ void HAL_GPIO::interruptEnable(bool enable){
 
 			extInterruptLines[exti]=context;
 			context->interruptEventOcured=false;
-			EXTI->IMR = EXTI->IMR & 1lu << pinNum;
+			EXTI->IMR = EXTI->IMR | (1lu << pinNum);
 
 		}else{
 			RODOS_ERROR("External IRQ Line already used by another HAL_GPIO");
